@@ -1,11 +1,17 @@
+{% macro ic(n) %}<svg viewBox="0 0 24 24">{% if n=='home' %}<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h4.5V15h4v4.5h4.5V10"/>
+{% elif n=='users' %}<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.500-6s6.500 2.400 6.500 6"/><circle cx="17" cy="9" r="2.500"/><path d="M17 14c2.800 0 4.800 1.700 4.800 4.500"/>
+{% elif n=='chat' %}<path d="M20.500 11.500a8 8 0 0 1-11.800 7L3.500 20l1.300-4.400A8 8 0 1 1 20.500 11.500z"/><path d="M8.500 11h7M8.500 14h4"/>
+{% elif n=='user' %}<circle cx="12" cy="8" r="4"/><path d="M4.500 20.500c0-4 3.400-6.500 7.500-6.500s7.500 2.500 7.500 6.500"/>
+{% else %}<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>{% endif %}</svg>{% endmacro %}
 {% from "_p.html" import av with context %}<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Снежок ❄</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script>document.documentElement.dataset.theme=localStorage.getItem('theme')||'dark'</script></head><body>
 <div class="garland">{% for i in range(60) %}<i></i>{% endfor %}</div>
 <div class="app">
-{% if me %}<aside class="side"><a class="logo" href="{{ url_for('feed') }}"><span>🎅</span> Снежок</a>
+{% if me %}<aside class="side"><a class="logo" href="{{ url_for('feed') }}"><svg class="lg" viewBox="0 0 24 24"><path fill="#2bb866" d="M12 3l5 7h-3l4 6h-4l3 5H7l3-5H6l4-6H7z"/><circle cx="12" cy="3" r="1.800" fill="#ffd54a"/><circle cx="10" cy="12" r="1" fill="#ff3b3b"/><circle cx="14" cy="16" r="1" fill="#ffd23b"/></svg> Снежок</a>
 <form action="{{ url_for('search') }}"><input class="srch" name="q" placeholder="🔍 Поиск" value="{{ request.args.get('q','') }}"></form>
-<nav><a href="{{ url_for('feed') }}"><b>🏠</b><em>Лента</em></a><a href="{{ url_for('chats') }}"><b>💬</b><em>Чаты</em></a><a href="{{ url_for('profile', name=me.name) }}"><b>👤</b><em>Профиль</em></a><a href="{{ url_for('settings') }}"><b>⚙️</b><em>Настройки</em></a><a href="{{ url_for('search') }}" class="onlym"><b>🔍</b><em>Поиск</em></a></nav>
+<nav>{% set items=[('feed',url_for('feed'),'home','Лента'),('people',url_for('people'),'users','Люди'),('chats',url_for('chats'),'chat','Чаты'),('profile',url_for('profile',name=me.name),'user','Профиль'),('settings',url_for('settings'),'sl','Настройки')] %}{% set ep=request.endpoint %}
+{% for i in items %}<a href="{{ i[1] }}" class="{{ 'on' if (ep==i[0] and (ep!='profile' or request.view_args.name|lower==me.name|lower)) or (i[0]=='chats' and ep=='chat') or (i[0]=='people' and ep=='search') }}">{{ ic(i[2]) }}<em>{{ i[3] }}</em></a>{% endfor %}</nav>
 <div class="me">{{ av(me.name) }}<span>{{ me.name }}</span><button id="th" title="Тема">🌓</button></div></aside>{% endif %}
 <main><div class="col">{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}{% block c %}{% endblock %}</div></main></div>
 <svg class="tree" viewBox="0 0 120 150"><polygon points="60,10 95,55 25,55" fill="#1f8a4c"/><polygon points="60,32 105,95 15,95" fill="#23a05a"/><polygon points="60,62 115,132 5,132" fill="#2bb866"/><rect x="52" y="132" width="16" height="16" fill="#7a4a21"/>

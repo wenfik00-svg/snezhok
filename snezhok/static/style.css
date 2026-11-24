@@ -11,7 +11,6 @@ a{color:inherit;text-decoration:none}.muted,small{color:var(--mu)}.pad{padding:2
 .side{width:280px;background:var(--side);border-right:1px solid var(--bd);display:flex;flex-direction:column;padding:12px;gap:10px;flex-shrink:0}
 .logo{font-size:22px;font-weight:700;padding:4px 8px}.logo span{display:inline-block;animation:wob 3s ease-in-out infinite}@keyframes wob{50%{transform:rotate(12deg)}}
 .srch{width:100%;padding:10px 14px;border:0;border-radius:20px;background:var(--inp);color:var(--tx);font:inherit}
-.side nav{display:flex;flex-direction:column;gap:2px;flex:1}.side nav a{display:flex;gap:14px;align-items:center;padding:11px 12px;border-radius:10px}.side nav a:hover{background:var(--inp)}.side nav b{width:26px;font-weight:400}.onlym{display:none!important}
 .me{display:flex;gap:10px;align-items:center;padding:8px}.me span{flex:1;font-weight:600}.me button{background:none;border:0;font-size:20px;cursor:pointer}
 main{flex:1;overflow:auto;background:var(--chat) radial-gradient(#ffffff14 1.5px,transparent 2px) 0 0/34px 34px}
 .col{max-width:640px;margin:auto;padding:12px 12px 140px}
@@ -34,4 +33,16 @@ button,.btn{cursor:pointer;border:0;border-radius:10px;padding:9px 16px;backgrou
 .bar{position:sticky;bottom:0;display:flex;gap:8px;align-items:center;margin-top:8px}.bar input{border-radius:22px;padding:12px 16px;background:var(--side)}.send{border-radius:50%;width:46px;height:46px;padding:0;font-size:18px;flex-shrink:0}
 .tree{position:fixed;right:14px;bottom:0;width:90px;pointer-events:none;filter:drop-shadow(0 0 8px #2bb86688);z-index:3}.b{fill:#ff3b3b;animation:bl 1s infinite alternate}.b:nth-of-type(even){fill:#ffd23b;animation-delay:.5s}
 .snow{position:fixed;top:-20px;color:#fff;opacity:.7;pointer-events:none;animation:fall linear infinite;z-index:9}@keyframes fall{to{transform:translateY(105vh) translateX(40px)}}
-@media(max-width:800px){.app{flex-direction:column-reverse}.side{width:100%;flex-direction:row;padding:4px;border:0;border-top:1px solid var(--bd)}.logo,.srch,form:has(.srch),.me span,.av{display:none}.me{padding:0}.side nav{flex-direction:row;justify-content:space-around}.side nav a{flex-direction:column;gap:0;padding:6px 8px;font-size:11px}.onlym{display:flex!important}.tree{display:none}.row2 .av,.chathead .av,.h .av,.prof .av{display:inline-flex}.col{padding-bottom:20px}#msgs{height:calc(100vh - 290px)}}
+@media(max-width:800px){.app{flex-direction:column-reverse}.side{width:100%;flex-direction:row;padding:4px;border:0;border-top:1px solid var(--bd)}.logo,.srch,form:has(.srch),.me span,.av{display:none}.me{padding:0}.lg{width:28px;height:28px;vertical-align:middle}
+.side nav{display:flex;flex-direction:column;gap:4px;flex:1}
+.side nav a{display:flex;align-items:center;gap:14px;padding:7px 10px;border-radius:14px;color:var(--mu);font-weight:500;transition:.2s}
+.side nav a em{font-style:normal}
+.side nav svg{width:22px;height:22px;padding:7px;border-radius:12px;background:var(--inp);fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;box-sizing:content-box;transition:.25s}
+.side nav a:hover{color:var(--tx)}.side nav a:hover svg{background:var(--ac);color:#fff;transform:rotate(-8deg) scale(1.08)}
+.side nav a.on{color:var(--tx);background:linear-gradient(90deg,#e6394633,transparent)}
+.side nav a.on svg{background:linear-gradient(135deg,#e63946,#ff7a59);color:#fff;box-shadow:0 0 14px #e6394699}
+.srch2{padding:13px 18px;border-radius:24px;margin:6px 0 12px}.pl{display:flex;gap:12px;align-items:center;flex:1;min-width:0}.btn.sm{padding:7px 12px;font-size:14px;flex:none}
+@media(max-width:800px){.app{flex-direction:column-reverse}.side{width:100%;flex-direction:row;padding:4px 2px;border:0;border-top:1px solid var(--bd)}
+.logo,.srch,form:has(.srch),.me span,.side .av{display:none}.me{padding:0 6px}
+.side nav{flex-direction:row;justify-content:space-around}.side nav a{flex-direction:column;gap:2px;padding:4px 6px;font-size:11px}.side nav svg{width:20px;height:20px;padding:5px}
+.tree{display:none}.col{padding-bottom:20px}#msgs{height:calc(100vh - 300px)}.row2 .btn{display:none}}

@@ -24,13 +24,49 @@ create table if not exists likes(uid integer, pid integer, primary key(uid,pid))
 create table if not exists comments(id integer primary key, uid integer, pid integer, body text, ts real);
 create table if not exists msgs(id integer primary key, frm integer, too integer, body text, ts real);
 """
+DBURL = os.environ.get("DATABASE_URL")  # если задан — Postgres (данные хранятся постоянно), иначе файл SQLite
+SCHEMA_PG = ["create extension if not exists citext",
+ "create table if not exists users(id serial primary key, name citext unique, pw text, bio text default '', created double precision)",
+ "create table if not exists posts(id serial primary key, uid integer, body text, ts double precision)",
+ "create table if not exists likes(uid integer, pid integer, primary key(uid,pid))",
+ "create table if not exists comments(id serial primary key, uid integer, pid integer, body text, ts double precision)",
+ "create table if not exists msgs(id serial primary key, frm integer, too integer, body text, ts double precision)"]
+
+def tr(q): return re.sub(r"\blike\b", "ilike", q.replace("?", "%s"))
+
+class R:
+    def __init__(s, cur, lid=None): s.cur, s.lastrowid, s.rowcount = cur, lid, cur.rowcount
+    def fetchone(s): return s.cur.fetchone()
+    def fetchall(s): return s.cur.fetchall()
+
+class Conn:
+    def __init__(s):
+        if DBURL:
+            import psycopg
+            from psycopg.rows import dict_row
+            s.c = psycopg.connect(DBURL, row_factory=dict_row)
+        else:
+            s.c = sqlite3.connect(DB); s.c.row_factory = sqlite3.Row
+    def execute(s, q, a=()):
+        if not DBURL: return s.c.execute(q, a)
+        q = tr(q); ins = q.lstrip().startswith("insert into users")
+        if ins: q += " returning id"
+        cur = s.c.execute(q, a)
+        return R(cur, cur.fetchone()["id"] if ins else None)
+    def commit(s): s.c.commit()
+    def close(s): s.c.close()
+
 def init():
-    c = sqlite3.connect(DB); c.executescript(SCHEMA); c.commit(); c.close()
+    c = Conn()
+    if DBURL:
+        for st in SCHEMA_PG: c.execute(st)
+    else:
+        c.c.executescript(SCHEMA)
+    c.commit(); c.close()
 init()
 
 def db():
-    if "db" not in g:
-        g.db = sqlite3.connect(DB); g.db.row_factory = sqlite3.Row
+    if "db" not in g: g.db = Conn()
     return g.db
 @app.teardown_appcontext
 def close(_):
@@ -49,6 +85,7 @@ def me():
     if "uid" not in session: return None
     if not hasattr(g, "me"):
         g.me = db().execute("select * from users where id=?", (session["uid"],)).fetchone()
+        if g.me is None: session.clear(); return None
     return g.me
 @app.context_processor
 def ctx():
@@ -205,6 +242,20 @@ def settings():
                 db().execute("update users set pw=? where id=?", (generate_password_hash(f["new"]), me()["id"])); db().commit(); flash("Пароль изменён 🔐")
         return redirect(url_for("settings"))
     return render_template("settings.html")
+
+def find(q):
+    l = "%" + q.replace("%", "").replace("_", "") + "%"
+    return db().execute("select name,bio from users where name like ? and id!=? order by (name like ?) desc, name limit 50",
+                        (l, me()["id"], q + "%")).fetchall()
+
+@app.route("/people")
+def people():
+    q = request.args.get("q", "").strip()[:30]
+    return render_template("people.html", users=find(q), q=q)
+
+@app.route("/api/people")
+def api_people():
+    return render_template("_ppl.html", users=find(request.args.get("q", "").strip()[:30]))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

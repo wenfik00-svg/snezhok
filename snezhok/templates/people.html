@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% block c %}<h2>Люди</h2>
+<input id="pq" class="srch2" placeholder="Начните вводить имя…" value="{{ q }}" autocomplete="off" autofocus>
+<div id="plist" class="list">{% include "_ppl.html" %}</div>{% endblock %}
