@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% from "_p.html" import tok with context %}{% block c %}<h2>⚙ Настройки</h2>
+<div class="card"><h3>Тема</h3><button class="btn" onclick="setTheme('dark')">🌙 Тёмная</button> <button class="btn" onclick="setTheme('light')">☀ Светлая</button></div>
+<form method="post" class="card">{{ tok() }}<input type="hidden" name="do" value="bio"><h3>О себе</h3><textarea name="bio" maxlength="300">{{ me.bio }}</textarea><button class="btn">Сохранить</button></form>
+<form method="post" class="card">{{ tok() }}<input type="hidden" name="do" value="pw"><h3>Смена пароля</h3><input type="password" name="old" placeholder="Старый пароль" required><input type="password" name="new" placeholder="Новый пароль (от 6 символов)" required><button class="btn">Изменить</button></form>
+<form method="post" action="{{ url_for('logout') }}">{{ tok() }}<button class="btn out">Выйти</button></form>{% endblock %}

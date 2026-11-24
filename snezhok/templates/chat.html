@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% from "_p.html" import tok, av with context %}{% block c %}
+<div class="chathead"><a href="{{ url_for('chats') }}">←</a>{{ av(o.name) }}<a href="{{ url_for('profile', name=o.name) }}"><b>{{ o.name }}</b></a></div>
+<div id="msgs">{% for m in msgs %}<div class="m {{ 'mine' if m.frm == me.id }}"><div class="bub">{{ m.body }}<small>{{ m.ts|dt }}</small></div></div>{% else %}<p class="muted pad">Напиши первое сообщение 🎄</p>{% endfor %}</div>
+<form method="post" class="bar">{{ tok() }}<input name="body" maxlength="1000" placeholder="Сообщение" required autofocus autocomplete="off"><button class="send">➤</button></form>{% endblock %}

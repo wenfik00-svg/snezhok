@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block c %}
+<div class="card auth"><h1>{{ 'Новый год ждёт тебя 🎁' if reg else 'С Новым годом! 🎅' }}</h1>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}">
+<input name="name" placeholder="Имя" required autocomplete="username"><input name="password" type="password" placeholder="Пароль" required autocomplete="{{ 'new-password' if reg else 'current-password' }}">
+<button class="btn">{{ 'Зарегистрироваться' if reg else 'Войти' }}</button></form>
+<p class="muted">{% if reg %}Уже есть аккаунт? <a href="{{ url_for('login') }}">Войти</a>{% else %}Впервые у нас? <a href="{{ url_for('register') }}">Создать аккаунт</a>{% endif %}</p></div>{% endblock %}

@@ -1,0 +1,14 @@
+{% from "_p.html" import av with context %}<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Снежок ❄</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script>document.documentElement.dataset.theme=localStorage.getItem('theme')||'dark'</script></head><body>
+<div class="garland">{% for i in range(60) %}<i></i>{% endfor %}</div>
+<div class="app">
+{% if me %}<aside class="side"><a class="logo" href="{{ url_for('feed') }}"><span>🎅</span> Снежок</a>
+<form action="{{ url_for('search') }}"><input class="srch" name="q" placeholder="🔍 Поиск" value="{{ request.args.get('q','') }}"></form>
+<nav><a href="{{ url_for('feed') }}"><b>🏠</b><em>Лента</em></a><a href="{{ url_for('chats') }}"><b>💬</b><em>Чаты</em></a><a href="{{ url_for('profile', name=me.name) }}"><b>👤</b><em>Профиль</em></a><a href="{{ url_for('settings') }}"><b>⚙️</b><em>Настройки</em></a><a href="{{ url_for('search') }}" class="onlym"><b>🔍</b><em>Поиск</em></a></nav>
+<div class="me">{{ av(me.name) }}<span>{{ me.name }}</span><button id="th" title="Тема">🌓</button></div></aside>{% endif %}
+<main><div class="col">{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}{% block c %}{% endblock %}</div></main></div>
+<svg class="tree" viewBox="0 0 120 150"><polygon points="60,10 95,55 25,55" fill="#1f8a4c"/><polygon points="60,32 105,95 15,95" fill="#23a05a"/><polygon points="60,62 115,132 5,132" fill="#2bb866"/><rect x="52" y="132" width="16" height="16" fill="#7a4a21"/>
+<polygon points="60,0 63,8 72,8 65,13 68,22 60,17 52,22 55,13 48,8 57,8" fill="#ffd54a"/>
+<circle class="b" cx="52" cy="45" r="3.5"/><circle class="b" cx="68" cy="78" r="3.5"/><circle class="b" cx="42" cy="85" r="3.5"/><circle class="b" cx="85" cy="112" r="3.5"/><circle class="b" cx="55" cy="108" r="3.5"/><circle class="b" cx="28" cy="120" r="3.5"/></svg>
+<script src="{{ url_for('static', filename='app.js') }}"></script></body></html>

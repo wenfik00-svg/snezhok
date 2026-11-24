@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% from "_p.html" import av with context %}{% block c %}<h2>Чаты</h2><div class="list">
+{% for u in users %}<a class="row2" href="{{ url_for('chat', name=u.name) }}">{{ av(u.name,'big') }}<div><b>{{ u.name }}</b><small>{{ u.body[:60] }}</small></div><small class="t">{{ u.ts|dt }}</small></a>
+{% else %}<p class="muted pad">Чатов пока нет. Найди человека через поиск и нажми «Написать».</p>{% endfor %}</div>{% endblock %}

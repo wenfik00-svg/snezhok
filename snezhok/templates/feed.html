@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% from "_p.html" import lst, tok with context %}{% block c %}
+<form method="post" action="{{ url_for('post') }}" class="card">{{ tok() }}<textarea name="body" maxlength="1000" placeholder="Что нового, {{ me.name }}? 🎄" required></textarea><button class="btn">Опубликовать 🎁</button></form>
+{{ lst(posts, more, n) }}{% endblock %}

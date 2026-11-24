@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% from "_p.html" import lst, av with context %}{% block c %}
+<div class="card prof">{{ av(u.name,"huge") }}<h1>{{ u.name }}</h1><p>{{ u.bio or 'Пока без описания' }}</p>
+{% if u.id != me.id %}<a class="btn" href="{{ url_for('chat', name=u.name) }}">✉ Написать</a>{% else %}<a class="btn" href="{{ url_for('settings') }}">Изменить</a>{% endif %}</div>
+<h2>Публикации</h2>{{ lst(posts, more, n) }}{% endblock %}
