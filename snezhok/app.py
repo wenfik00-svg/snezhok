@@ -12,7 +12,7 @@ if not os.path.exists(kf):
     open(kf, "w").write(secrets.token_hex(32))
 app.secret_key = os.environ.get("SECRET_KEY") or open(kf).read()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
-                  SESSION_COOKIE_SECURE=bool(os.environ.get("HTTPS")), MAX_CONTENT_LENGTH=64 * 1024)
+                  SESSION_COOKIE_SECURE=bool(os.environ.get("HTTPS")), PERMANENT_SESSION_LIFETIME=60*60*24*30, MAX_CONTENT_LENGTH=64 * 1024)
 if os.environ.get("BEHIND_PROXY"):
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -77,12 +77,16 @@ def register():
             flash("Слишком много регистраций с вашего адреса. Попробуйте позже.")
         else:
             n, p = request.form.get("name", "").strip(), request.form.get("password", "")
+            u0 = db().execute("select * from users where name=?", (n,)).fetchone()
             if not re.fullmatch(r"[A-Za-zА-Яа-яЁё0-9_]{3,20}", n): flash("Имя: 3–20 букв, цифр или _")
             elif len(p) < 6: flash("Пароль минимум 6 символов")
-            elif db().execute("select 1 from users where name=?", (n,)).fetchone(): flash("Это имя уже занято")
+            elif u0 and check_password_hash(u0["pw"], p):
+                session.clear(); session.permanent = True; session["uid"] = u0["id"]
+                return redirect(url_for("feed"))
+            elif u0: flash("Это имя уже занято. Если это ваш аккаунт, нажмите «Войти» и введите свой пароль.")
             else:
                 c = db().execute("insert into users(name,pw,created) values(?,?,?)", (n, generate_password_hash(p), time.time()))
-                db().commit(); session.clear(); session["uid"] = c.lastrowid
+                db().commit(); session.clear(); session.permanent = True; session["uid"] = c.lastrowid
                 return redirect(url_for("feed"))
     return render_template("auth.html", reg=True)
 
@@ -94,7 +98,7 @@ def login():
         else:
             u = db().execute("select * from users where name=?", (request.form.get("name", "").strip(),)).fetchone()
             if u and check_password_hash(u["pw"], request.form.get("password", "")):
-                session.clear(); session["uid"] = u["id"]; return redirect(url_for("feed"))
+                session.clear(); session.permanent = True; session["uid"] = u["id"]; return redirect(url_for("feed"))
             flash("Неверное имя или пароль")
     return render_template("auth.html", reg=False)
 
