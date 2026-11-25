@@ -1,20 +1,20 @@
-{% macro ic(n) %}<svg viewBox="0 0 24 24">{% if n=='home' %}<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h4.5V15h4v4.5h4.5V10"/>
-{% elif n=='users' %}<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.500-6s6.500 2.400 6.500 6"/><circle cx="17" cy="9" r="2.500"/><path d="M17 14c2.800 0 4.800 1.700 4.800 4.500"/>
-{% elif n=='chat' %}<path d="M20.500 11.500a8 8 0 0 1-11.800 7L3.500 20l1.300-4.400A8 8 0 1 1 20.500 11.500z"/><path d="M8.500 11h7M8.500 14h4"/>
-{% elif n=='user' %}<circle cx="12" cy="8" r="4"/><path d="M4.500 20.500c0-4 3.400-6.500 7.500-6.500s7.500 2.500 7.500 6.500"/>
-{% else %}<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>{% endif %}</svg>{% endmacro %}
+{% macro ic(n) %}<svg viewBox="0 0 24 24">{% if n=='home' %}<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+{% elif n=='users' %}<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+{% elif n=='chat' %}<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
+{% elif n=='user' %}<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+{% else %}<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>{% endif %}</svg>{% endmacro %}
 {% from "_p.html" import av with context %}<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Снежок ❄</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<meta name="csrf" content="{{ csrf }}"><link rel="manifest" href="/manifest.json"><link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}"><meta name="theme-color" content="#0e1621"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Снежок"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><title>Снежок ❄</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 <script>document.documentElement.dataset.theme=localStorage.getItem('theme')||'dark'</script></head><body>
 <div class="garland">{% for i in range(60) %}<i></i>{% endfor %}</div>
 <div class="app">
 {% if me %}<aside class="side"><a class="logo" href="{{ url_for('feed') }}"><svg class="lg" viewBox="0 0 24 24"><path fill="#2bb866" d="M12 3l5 7h-3l4 6h-4l3 5H7l3-5H6l4-6H7z"/><circle cx="12" cy="3" r="1.800" fill="#ffd54a"/><circle cx="10" cy="12" r="1" fill="#ff3b3b"/><circle cx="14" cy="16" r="1" fill="#ffd23b"/></svg> Снежок</a>
 <form action="{{ url_for('search') }}"><input class="srch" name="q" placeholder="🔍 Поиск" value="{{ request.args.get('q','') }}"></form>
-<nav>{% set items=[('feed',url_for('feed'),'home','Лента'),('people',url_for('people'),'users','Люди'),('chats',url_for('chats'),'chat','Чаты'),('profile',url_for('profile',name=me.name),'user','Профиль'),('settings',url_for('settings'),'sl','Настройки')] %}{% set ep=request.endpoint %}
-{% for i in items %}<a href="{{ i[1] }}" class="{{ 'on' if (ep==i[0] and (ep!='profile' or request.view_args.name|lower==me.name|lower)) or (i[0]=='chats' and ep=='chat') or (i[0]=='people' and ep=='search') }}">{{ ic(i[2]) }}<em>{{ i[3] }}</em></a>{% endfor %}</nav>
+<nav>{% set items=[('feed',url_for('feed'),'home','Лента'),('people',url_for('people'),'users','Люди'),('chats',url_for('chats'),'chat','Чаты'),('profile',url_for('profile',name=me.name),'user','Профиль'),('settings',url_for('settings'),'gear','Настройки')] %}{% set ep=request.endpoint %}
+{% for i in items %}<a href="{{ i[1] }}" class="i-{{ i[2] }} {{ 'on' if (ep==i[0] and (ep!='profile' or request.view_args.name|lower==me.name|lower)) or (i[0]=='chats' and ep=='chat') or (i[0]=='people' and ep=='search') }}">{{ ic(i[2]) }}<em>{{ i[3] }}</em>{% if i[0]=='chats' %}<b class="bdg" id="bdg"></b>{% endif %}</a>{% endfor %}</nav>
 <div class="me">{{ av(me.name) }}<span>{{ me.name }}</span><button id="th" title="Тема">🌓</button></div></aside>{% endif %}
 <main><div class="col">{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}{% block c %}{% endblock %}</div></main></div>
 <svg class="tree" viewBox="0 0 120 150"><polygon points="60,10 95,55 25,55" fill="#1f8a4c"/><polygon points="60,32 105,95 15,95" fill="#23a05a"/><polygon points="60,62 115,132 5,132" fill="#2bb866"/><rect x="52" y="132" width="16" height="16" fill="#7a4a21"/>
 <polygon points="60,0 63,8 72,8 65,13 68,22 60,17 52,22 55,13 48,8 57,8" fill="#ffd54a"/>
 <circle class="b" cx="52" cy="45" r="3.5"/><circle class="b" cx="68" cy="78" r="3.5"/><circle class="b" cx="42" cy="85" r="3.5"/><circle class="b" cx="85" cy="112" r="3.5"/><circle class="b" cx="55" cy="108" r="3.5"/><circle class="b" cx="28" cy="120" r="3.5"/></svg>
-<script src="{{ url_for('static', filename='app.js') }}"></script></body></html>
+<div id="toast"></div><script src="{{ url_for('static', filename='app.js') }}"></script></body></html>

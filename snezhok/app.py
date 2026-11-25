@@ -1,7 +1,7 @@
-import os, re, time, secrets, sqlite3
+import os, re, time, secrets, sqlite3, json, base64, threading
 from collections import defaultdict, deque
 from datetime import datetime
-from flask import Flask, g, request, session, redirect, url_for, render_template, abort, flash
+from flask import jsonify, Flask, g, request, session, redirect, url_for, render_template, abort, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +23,8 @@ create table if not exists posts(id integer primary key, uid integer, body text,
 create table if not exists likes(uid integer, pid integer, primary key(uid,pid));
 create table if not exists comments(id integer primary key, uid integer, pid integer, body text, ts real);
 create table if not exists msgs(id integer primary key, frm integer, too integer, body text, ts real);
+create table if not exists kv(k text primary key, v text);
+create table if not exists push_subs(id integer primary key, uid integer, endpoint text unique, p256dh text, auth text);
 """
 DBURL = os.environ.get("DATABASE_URL")  # если задан — Postgres (данные хранятся постоянно), иначе файл SQLite
 SCHEMA_PG = ["create extension if not exists citext",
@@ -30,7 +32,9 @@ SCHEMA_PG = ["create extension if not exists citext",
  "create table if not exists posts(id serial primary key, uid integer, body text, ts double precision)",
  "create table if not exists likes(uid integer, pid integer, primary key(uid,pid))",
  "create table if not exists comments(id serial primary key, uid integer, pid integer, body text, ts double precision)",
- "create table if not exists msgs(id serial primary key, frm integer, too integer, body text, ts double precision)"]
+ "create table if not exists msgs(id serial primary key, frm integer, too integer, body text, ts double precision)",
+ "create table if not exists kv(k text primary key, v text)",
+ "create table if not exists push_subs(id serial primary key, uid integer, endpoint text unique, p256dh text, auth text)"]
 
 def tr(q): return re.sub(r"\blike\b", "ilike", q.replace("?", "%s"))
 
@@ -56,12 +60,18 @@ class Conn:
     def commit(s): s.c.commit()
     def close(s): s.c.close()
 
+ALT = [("users", "last_seen", "real default 0"), ("users", "typing_to", "integer"),
+       ("users", "typing_ts", "real default 0"), ("msgs", "seen", "integer default 0")]
 def init():
     c = Conn()
     if DBURL:
         for st in SCHEMA_PG: c.execute(st)
+        for t, col, typ in ALT: c.execute(f"alter table {t} add column if not exists {col} {typ.replace('real', 'double precision')}")
     else:
         c.c.executescript(SCHEMA)
+        for t, col, typ in ALT:
+            try: c.c.execute(f"alter table {t} add column {col} {typ}")
+            except sqlite3.OperationalError: pass
     c.commit(); c.close()
 init()
 
@@ -92,6 +102,8 @@ def ctx():
     return dict(me=me(), csrf=session.setdefault("csrf", secrets.token_hex(16)))
 @app.template_filter("hue")
 def hue(s): return sum(map(ord, s)) * 37 % 360
+@app.template_filter("tm")
+def tm(t): return datetime.fromtimestamp(t).strftime("%H:%M")
 @app.template_filter("dt")
 def dt(t): return datetime.fromtimestamp(t).strftime("%d.%m.%Y %H:%M")
 
@@ -99,7 +111,7 @@ def dt(t): return datetime.fromtimestamp(t).strftime("%d.%m.%Y %H:%M")
 def guard():
     if request.method == "POST" and request.form.get("csrf", "") != session.get("csrf", None):
         abort(400)
-    if request.endpoint not in ("login", "register", "static") and not me():
+    if request.endpoint not in ("login", "register", "static", "sw", "manifest") and not me():
         return redirect(url_for("login"))
 def back(): return redirect(request.referrer or url_for("feed"))
 def spam(kind, n=10, sec=60):
@@ -213,8 +225,8 @@ def search():
 @app.route("/chats")
 def chats():
     i = me()["id"]
-    users = db().execute("select u.name,m.body,m.ts from msgs m join users u on u.id=(case when m.frm=? then m.too else m.frm end) "
-        "where m.id in (select max(id) from msgs where frm=? or too=? group by (case when frm=? then too else frm end)) order by m.id desc", (i, i, i, i)).fetchall()
+    users = db().execute("select u.name,m.body,m.ts,(select count(*) from msgs x where x.frm=u.id and x.too=? and x.seen=0) un from msgs m join users u on u.id=(case when m.frm=? then m.too else m.frm end) "
+        "where m.id in (select max(id) from msgs where frm=? or too=? group by (case when frm=? then too else frm end)) order by m.id desc", (i, i, i, i, i)).fetchall()
     return render_template("chats.html", users=users)
 
 @app.route("/chat/<name>", methods=["GET", "POST"])
@@ -224,10 +236,11 @@ def chat(name):
     if request.method == "POST":
         b = request.form.get("body", "").strip()[:1000]
         if b and not spam("msg", 20):
-            db().execute("insert into msgs(frm,too,body,ts) values(?,?,?,?)", (i, o["id"], b, time.time())); db().commit()
+            db().execute("insert into msgs(frm,too,body,ts) values(?,?,?,?)", (i, o["id"], b, time.time())); db().execute("update users set typing_ts=0 where id=?", (i,)); db().commit(); notify(o, me()["name"], b)
         return redirect(url_for("chat", name=o["name"]))
+    db().execute("update msgs set seen=1 where frm=? and too=? and seen=0", (o["id"], i)); db().commit()
     m = db().execute("select * from msgs where (frm=? and too=?) or (frm=? and too=?) order by id desc limit 100", (i, o["id"], o["id"], i)).fetchall()[::-1]
-    return render_template("chat.html", o=o, msgs=m)
+    return render_template("chat.html", o=o, msgs=m, ago=time.time() - (o["last_seen"] or 0))
 
 @app.route("/settings", methods=["GET", "POST"])
 def settings():
@@ -256,6 +269,124 @@ def people():
 @app.route("/api/people")
 def api_people():
     return render_template("_ppl.html", users=find(request.args.get("q", "").strip()[:30]))
+
+@app.route("/api/poll")
+def poll():
+    i = me()["id"]; now = time.time(); d = db()
+    if now - (me()["last_seen"] or 0) > 10:
+        d.execute("update users set last_seen=? where id=?", (now, i))
+    since = request.args.get("since", -1, type=int)
+    last = d.execute("select coalesce(max(id),0) m from msgs where too=?", (i,)).fetchone()["m"]
+    new = []
+    if since >= 0:
+        new = [dict(r) for r in d.execute("select m.id,m.body,u.name from msgs m join users u on u.id=m.frm where m.too=? and m.id>? order by m.id limit 5", (i, since)).fetchall()]
+    out = {"new": new, "last": int(last)}
+    o = d.execute("select * from users where name=?", (request.args.get("chat", ""),)).fetchone()
+    if o:
+        if request.args.get("vis") == "1":
+            d.execute("update msgs set seen=1 where frm=? and too=? and seen=0", (o["id"], i))
+        r = d.execute("select coalesce(max(id),0) a, coalesce(sum(case when frm=? and seen=1 then 1 else 0 end),0) b from msgs "
+                      "where (frm=? and too=?) or (frm=? and too=?)", (i, i, o["id"], o["id"], i)).fetchone()
+        out["sig"] = "%d:%d" % (r["a"], r["b"])
+        out["peer"] = {"ago": now - (o["last_seen"] or 0), "typing": bool(o["typing_to"] == i and now - (o["typing_ts"] or 0) < 4)}
+    out["unread"] = d.execute("select count(*) c from msgs where too=? and seen=0", (i,)).fetchone()["c"]
+    d.commit()
+    return jsonify(out)
+
+@app.route("/api/typing", methods=["POST"])
+def typing():
+    o = db().execute("select id from users where name=?", (request.form.get("to", ""),)).fetchone()
+    if o:
+        db().execute("update users set typing_to=?,typing_ts=? where id=?", (o["id"], time.time(), me()["id"])); db().commit()
+    return "", 204
+
+# ---- push-уведомления (работают, даже когда сайт закрыт) ----
+def b64(b): return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+def vapid():
+    if os.environ.get("VAPID_PUBLIC") and os.environ.get("VAPID_PRIVATE"):
+        return os.environ["VAPID_PUBLIC"], os.environ["VAPID_PRIVATE"]
+    d = db()
+    kv = {r["k"]: r["v"] for r in d.execute("select k,v from kv").fetchall()}
+    if "vpub" not in kv:
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import serialization as S
+        k = ec.generate_private_key(ec.SECP256R1())
+        kv = {"vpriv": b64(k.private_numbers().private_value.to_bytes(32, "big")),
+              "vpub": b64(k.public_key().public_bytes(S.Encoding.X962, S.PublicFormat.UncompressedPoint))}
+        try:
+            for a, v in kv.items(): d.execute("insert into kv(k,v) values(?,?)", (a, v))
+            d.commit()
+        except Exception:
+            d.c.rollback(); kv = {r["k"]: r["v"] for r in d.execute("select k,v from kv").fetchall()}
+    return kv["vpub"], kv["vpriv"]
+
+def vkey(pr):
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization as S
+    raw = base64.urlsafe_b64decode(pr + "=" * (-len(pr) % 4))
+    if len(raw) != 32: return pr
+    k = ec.derive_private_key(int.from_bytes(raw, "big"), ec.SECP256R1())
+    return b64(k.private_bytes(S.Encoding.DER, S.PrivateFormat.PKCS8, S.NoEncryption()))
+
+def _send(subs, payload, pr, sub):
+    try:
+        from pywebpush import webpush, WebPushException
+        key = vkey(pr)
+    except Exception:
+        return
+    for s_ in subs:
+        try:
+            webpush(subscription_info={"endpoint": s_["endpoint"], "keys": {"p256dh": s_["p256dh"], "auth": s_["auth"]}},
+                    data=payload, vapid_private_key=key, vapid_claims={"sub": sub}, ttl=3600)
+        except WebPushException as e:
+            if e.response is not None and e.response.status_code in (404, 410):
+                try:
+                    c = Conn(); c.execute("delete from push_subs where endpoint=?", (s_["endpoint"],)); c.commit(); c.close()
+                except Exception: pass
+        except Exception:
+            pass
+
+def push(uid, title, body, url, tag):
+    subs = [dict(r) for r in db().execute("select * from push_subs where uid=?", (uid,)).fetchall()]
+    if not subs: return
+    _, pr = vapid()
+    threading.Thread(target=_send, daemon=True, args=(subs, json.dumps({"title": title, "body": body[:120], "url": url, "tag": tag}),
+                     pr, request.host_url.rstrip("/"))).start()
+
+def notify(o, frm, text):
+    if time.time() - (o["last_seen"] or 0) < 15: return  # человек сейчас в приложении — ему хватит всплывашки на сайте
+    try: push(o["id"], frm, text, "/chat/" + frm, "chat-" + frm)
+    except Exception: pass
+
+@app.route("/sw.js")
+def sw():
+    return app.send_static_file("sw.js"), 200, {"Content-Type": "text/javascript", "Service-Worker-Allowed": "/", "Cache-Control": "no-cache"}
+
+@app.route("/manifest.json")
+def manifest():
+    return app.send_static_file("manifest.json"), 200, {"Content-Type": "application/manifest+json"}
+
+@app.route("/api/push/key")
+def push_key(): return jsonify(key=vapid()[0])
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_sub():
+    try:
+        j = json.loads(request.form.get("sub", "")); e, k = j["endpoint"], j["keys"]
+        db().execute("delete from push_subs where endpoint=?", (e,))
+        db().execute("insert into push_subs(uid,endpoint,p256dh,auth) values(?,?,?,?)", (me()["id"], e, k["p256dh"], k["auth"])); db().commit()
+    except Exception: abort(400)
+    return "", 204
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def push_unsub():
+    db().execute("delete from push_subs where endpoint=? and uid=?", (request.form.get("endpoint", ""), me()["id"])); db().commit(); return "", 204
+
+@app.route("/api/push/test", methods=["POST"])
+def push_test():
+    if not spam("pushtest", 3): push(me()["id"], "Снежок ❄", "Уведомления работают! 🎄", "/chats", "test")
+    return "", 204
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
