@@ -1,4 +1,5 @@
-{% extends "base.html" %}{% from "_p.html" import tok with context %}{% block c %}<h2>⚙ Настройки</h2>
+{% extends "base.html" %}{% from "_p.html" import tok, av with context %}{% block c %}<h2>⚙ Настройки</h2>
+<form method="post" enctype="multipart/form-data" class="card">{{ tok() }}<input type="hidden" name="do" value="avatar"><h3>📸 Фото профиля</h3><div class="row c">{{ av(me.name,'big') }}<label class="btn cam">Выбрать <input type="file" name="img" accept="image/*" hidden required></label><button class="btn">Загрузить</button></div></form>
 <div class="card"><h3>🔔 Уведомления</h3><p class="muted" id="pushst">Проверяем…</p><button class="btn" id="pushbtn" style="display:none"></button> <button class="btn out" id="pushtest" style="display:none">Тест</button></div>
 <div class="card"><h3>Тема</h3><button class="btn" onclick="setTheme('dark')">🌙 Тёмная</button> <button class="btn" onclick="setTheme('light')">☀ Светлая</button></div>
 <form method="post" class="card">{{ tok() }}<input type="hidden" name="do" value="bio"><h3>О себе</h3><textarea name="bio" maxlength="300">{{ me.bio }}</textarea><button class="btn">Сохранить</button></form>

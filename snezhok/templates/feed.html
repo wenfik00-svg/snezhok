@@ -1,3 +1,6 @@
 {% extends "base.html" %}{% from "_p.html" import lst, tok with context %}{% block c %}
-<form method="post" action="{{ url_for('post') }}" class="card">{{ tok() }}<textarea name="body" maxlength="1000" placeholder="Что нового, {{ me.name }}? 🎄" required></textarea><button class="btn">Опубликовать 🎁</button></form>
+<form method="post" action="{{ url_for('post') }}" enctype="multipart/form-data" class="card compose">{{ tok() }}<textarea name="body" maxlength="1000" placeholder="Что нового, {{ me.name }}? 🎄"></textarea>
+<div class="row"><label class="btn cam">📷 <span>Фото</span><input type="file" name="img" accept="image/*" hidden></label><button class="btn go">Опубликовать 🎁</button></div></form>
+<div class="tabs"><a class="{{ '' if f else 'on' }}" href="{{ url_for('feed') }}">Все</a><a class="{{ 'on' if f }}" href="{{ url_for('feed', f=1) }}">Подписки</a></div>
+{% if f and not posts %}<p class="muted pad">Подпишитесь на людей в разделе «Люди», и их посты появятся здесь.</p>{% endif %}
 {{ lst(posts, more, n) }}{% endblock %}

@@ -1,17 +1,20 @@
 {% macro tok() %}<input type="hidden" name="csrf" value="{{ csrf }}">{% endmacro %}
-{% macro av(name, c="") %}<span class="av {{ c }}" style="background:hsl({{ name|hue }},55%,46%)">{{ name[0]|upper }}</span>{% endmacro %}
+{% macro av(name, c="") %}<span class="av {{ c }}" style="background:hsl({{ name|hue }},55%,46%)">{{ name[0]|upper }}<img src="{{ url_for('avatar', name=name) }}" alt="" loading="lazy" onerror="this.remove()"></span>{% endmacro %}
+{% macro rxf(p, e, cls, txt) %}<form method="post" action="{{ url_for('react', id=p.id) }}">{{ tok() }}<input type="hidden" name="e" value="{{ e }}"><button class="{{ cls }}">{{ txt }}</button></form>{% endmacro %}
 {% macro post(p) %}
-<article class="card">
- <div class="h">{{ av(p.name) }}<a href="{{ url_for('profile', name=p.name) }}"><b>{{ p.name }}</b></a><small>{{ p.ts|dt }}</small>
- {% if p.uid == me.id %}<form method="post" action="{{ url_for('delpost', id=p.id) }}">{{ tok() }}<button class="x" title="Удалить пост">🗑</button></form>{% endif %}</div>
- <p class="body">{{ p.body }}</p>
- <form method="post" action="{{ url_for('like', id=p.id) }}">{{ tok() }}<button class="like {{ 'on' if p.liked }}">{{ '❤️' if p.liked else '🤍' }} {{ p.lk }}</button></form>
- {% for c in p.comments %}<div class="cm"><a href="{{ url_for('profile', name=c.name) }}"><b>{{ c.name }}</b></a> {{ c.body }}
+<article class="card post" id="p{{ p.id }}">
+ <div class="h">{{ av(p.name) }}<div class="who"><a href="{{ url_for('profile', name=p.name) }}"><b>{{ p.name }}</b></a><small>{{ p.ts|dt }}</small></div>
+ {% if p.uid == me.id %}<form method="post" action="{{ url_for('delpost', id=p.id) }}" class="del">{{ tok() }}<button class="x" title="Удалить пост">🗑</button></form>{% endif %}</div>
+ {% if p.body %}<p class="body">{{ p.body }}</p>{% endif %}
+ {% if p.img %}<a href="{{ url_for('img', id=p.img) }}" target="_blank"><img class="pimg" src="{{ url_for('img', id=p.img) }}" alt="" loading="lazy"></a>{% endif %}
+ <div class="rxs">{% for x in p.rx %}{{ rxf(p, x.e, 'chip' ~ (' me' if p.mine == x.e else ''), x.e ~ ' ' ~ x.c) }}{% endfor %}
+ <details class="rx"><summary class="chip">☺ +</summary><div class="pick">{% for e in ['❤️','👍','😂','🔥','🎄'] %}{{ rxf(p, e, '', e) }}{% endfor %}</div></details></div>
+ {% for c in p.comments %}<div class="cm">{{ av(c.name, 'sm') }}<div><a href="{{ url_for('profile', name=c.name) }}"><b>{{ c.name }}</b></a> {{ c.body }}</div>
  {% if c.uid == me.id %}<form method="post" action="{{ url_for('delcomment', id=c.id) }}">{{ tok() }}<button class="x">✕</button></form>{% endif %}</div>{% endfor %}
  <form method="post" action="{{ url_for('comment', id=p.id) }}" class="row">{{ tok() }}<input name="body" maxlength="500" placeholder="Комментарий…" required><button>➤</button></form>
 </article>
 {% endmacro %}
 {% macro lst(posts, more, n) %}
-{% for p in posts %}{{ post(p) }}{% else %}<p class="muted">Пока здесь тихо, как в сугробе ❄️</p>{% endfor %}
-{% if more %}<a class="btn more" href="?n={{ n }}">Показать ещё ↓</a>{% endif %}
+{% for p in posts %}{{ post(p) }}{% else %}<p class="muted pad">Пока здесь тихо, как в сугробе ❄️</p>{% endfor %}
+{% if more %}<a class="btn more" href="?{{ 'f=1&' if request.args.get('f') }}n={{ n }}">Показать ещё ↓</a>{% endif %}
 {% endmacro %}

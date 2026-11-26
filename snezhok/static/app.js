@@ -32,3 +32,4 @@ if(await Notification.requestPermission()!='granted'){st.textContent='Разре
 const key=(await(await fetch('/api/push/key')).json()).key;sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(key)});
 await post('/api/push/subscribe',{sub:JSON.stringify(sub)});draw()};
 tb.onclick=()=>post('/api/push/test',{})})()}
+document.querySelectorAll('input[type=file]').forEach(i=>i.onchange=()=>{const s=i.parentElement.querySelector('span');const t=i.files[0]?'✓ '+i.files[0].name.slice(0,16):'Фото';if(s)s.textContent=t;else i.parentElement.firstChild.textContent=t+' '});

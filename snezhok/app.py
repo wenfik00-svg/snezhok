@@ -1,4 +1,4 @@
-import os, re, time, secrets, sqlite3, json, base64, threading
+import os, io, re, time, secrets, sqlite3, json, base64, threading
 from collections import defaultdict, deque
 from datetime import datetime
 from flask import jsonify, Flask, g, request, session, redirect, url_for, render_template, abort, flash
@@ -12,7 +12,7 @@ if not os.path.exists(kf):
     open(kf, "w").write(secrets.token_hex(32))
 app.secret_key = os.environ.get("SECRET_KEY") or open(kf).read()
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
-                  SESSION_COOKIE_SECURE=bool(os.environ.get("HTTPS")), PERMANENT_SESSION_LIFETIME=60*60*24*30, MAX_CONTENT_LENGTH=64 * 1024)
+                  SESSION_COOKIE_SECURE=bool(os.environ.get("HTTPS")), PERMANENT_SESSION_LIFETIME=60*60*24*30, MAX_CONTENT_LENGTH=8 * 1024 * 1024)
 if os.environ.get("BEHIND_PROXY"):
     from werkzeug.middleware.proxy_fix import ProxyFix
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
@@ -24,6 +24,9 @@ create table if not exists likes(uid integer, pid integer, primary key(uid,pid))
 create table if not exists comments(id integer primary key, uid integer, pid integer, body text, ts real);
 create table if not exists msgs(id integer primary key, frm integer, too integer, body text, ts real);
 create table if not exists kv(k text primary key, v text);
+create table if not exists files(id integer primary key, mime text, data blob);
+create table if not exists follows(a integer, b integer, primary key(a,b));
+create table if not exists reacts(uid integer, pid integer, e text, primary key(uid,pid));
 create table if not exists push_subs(id integer primary key, uid integer, endpoint text unique, p256dh text, auth text);
 """
 DBURL = os.environ.get("DATABASE_URL")  # если задан — Postgres (данные хранятся постоянно), иначе файл SQLite
@@ -34,6 +37,9 @@ SCHEMA_PG = ["create extension if not exists citext",
  "create table if not exists comments(id serial primary key, uid integer, pid integer, body text, ts double precision)",
  "create table if not exists msgs(id serial primary key, frm integer, too integer, body text, ts double precision)",
  "create table if not exists kv(k text primary key, v text)",
+ "create table if not exists files(id serial primary key, mime text, data bytea)",
+ "create table if not exists follows(a integer, b integer, primary key(a,b))",
+ "create table if not exists reacts(uid integer, pid integer, e text, primary key(uid,pid))",
  "create table if not exists push_subs(id serial primary key, uid integer, endpoint text unique, p256dh text, auth text)"]
 
 def tr(q): return re.sub(r"\blike\b", "ilike", q.replace("?", "%s"))
@@ -53,7 +59,7 @@ class Conn:
             s.c = sqlite3.connect(DB); s.c.row_factory = sqlite3.Row
     def execute(s, q, a=()):
         if not DBURL: return s.c.execute(q, a)
-        q = tr(q); ins = q.lstrip().startswith("insert into users")
+        q = tr(q); ins = q.lstrip().startswith(("insert into users", "insert into files"))
         if ins: q += " returning id"
         cur = s.c.execute(q, a)
         return R(cur, cur.fetchone()["id"] if ins else None)
@@ -61,7 +67,8 @@ class Conn:
     def close(s): s.c.close()
 
 ALT = [("users", "last_seen", "real default 0"), ("users", "typing_to", "integer"),
-       ("users", "typing_ts", "real default 0"), ("msgs", "seen", "integer default 0")]
+       ("users", "typing_ts", "real default 0"), ("msgs", "seen", "integer default 0"),
+       ("users", "avatar", "integer"), ("posts", "img", "integer")]
 def init():
     c = Conn()
     if DBURL:
@@ -72,6 +79,11 @@ def init():
         for t, col, typ in ALT:
             try: c.c.execute(f"alter table {t} add column {col} {typ}")
             except sqlite3.OperationalError: pass
+    try:
+        c.execute("insert into reacts(uid,pid,e) select uid,pid,'❤️' from likes where (uid,pid) not in (select uid,pid from reacts)")
+    except Exception:
+        try: c.c.rollback()
+        except Exception: pass
     c.commit(); c.close()
 init()
 
@@ -113,7 +125,18 @@ def guard():
         abort(400)
     if request.endpoint not in ("login", "register", "static", "sw", "manifest") and not me():
         return redirect(url_for("login"))
-def back(): return redirect(request.referrer or url_for("feed"))
+def back(a=""):
+    return redirect((request.referrer or url_for("feed")).split("#")[0] + ("#" + a if a else ""))
+REACT = ["❤️", "👍", "😂", "🔥", "🎄"]
+def save_img(fs, size, square=False):
+    from PIL import Image, ImageOps
+    Image.MAX_IMAGE_PIXELS = 40_000_000
+    im = ImageOps.exif_transpose(Image.open(fs.stream)).convert("RGB")
+    if square: im = ImageOps.fit(im, (size, size))
+    else: im.thumbnail((size, size))
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=82, optimize=True)
+    c = db().execute("insert into files(mime,data) values(?,?)", ("image/jpeg", buf.getvalue()))
+    db().commit(); return c.lastrowid
 def spam(kind, n=10, sec=60):
     if limited(f"{kind}:{session.get('uid')}", n, sec):
         flash("⛄ Слишком часто! Подожди минутку — защита от спама."); return True
@@ -156,52 +179,82 @@ def logout():
     session.clear(); return redirect(url_for("login"))
 
 def posts(where="", args=(), n=10):
-    rows = db().execute("select p.*,u.name,(select count(*) from likes where pid=p.id) lk,"
-        "(select count(*) from likes where pid=p.id and uid=?) liked from posts p join users u on u.id=p.uid "
-        + where + " order by p.id desc limit ?", (me()["id"], *args, n + 1)).fetchall()
+    rows = db().execute("select p.*,u.name from posts p join users u on u.id=p.uid " + where + " order by p.id desc limit ?", (*args, n + 1)).fetchall()
     out = []
     for r in rows[:n]:
         d = dict(r)
         d["comments"] = db().execute("select c.*,u.name from comments c join users u on u.id=c.uid where pid=? order by c.id", (r["id"],)).fetchall()
+        d["rx"] = db().execute("select e, count(*) c from reacts where pid=? group by e order by c desc", (r["id"],)).fetchall()
+        m = db().execute("select e from reacts where pid=? and uid=?", (r["id"], me()["id"])).fetchone()
+        d["mine"] = m["e"] if m else None
         out.append(d)
     return out, len(rows) > n
 def nparam(): return min(max(request.args.get("n", 10, type=int), 10), 300)
 
 @app.route("/")
 def feed():
-    n = nparam(); p, more = posts(n=n)
-    return render_template("feed.html", posts=p, more=more, n=n + 10)
+    n = nparam(); f = request.args.get("f") == "1"
+    p, more = posts("where p.uid in (select b from follows where a=?)", (me()["id"],), n) if f else posts(n=n)
+    return render_template("feed.html", posts=p, more=more, n=n + 10, f=f)
 
 @app.route("/post", methods=["POST"])
 def post():
-    b = request.form.get("body", "").strip()[:1000]
-    if b and not spam("post", 5):
-        db().execute("insert into posts(uid,body,ts) values(?,?,?)", (me()["id"], b, time.time())); db().commit()
+    b = request.form.get("body", "").strip()[:1000]; fs = request.files.get("img"); img = None
+    if (b or (fs and fs.filename)) and not spam("post", 5):
+        if fs and fs.filename:
+            try: img = save_img(fs, 1280)
+            except Exception: flash("Не удалось загрузить фото. Нужен файл JPG или PNG."); return redirect(url_for("feed"))
+        db().execute("insert into posts(uid,body,ts,img) values(?,?,?,?)", (me()["id"], b, time.time(), img)); db().commit()
     return redirect(url_for("feed"))
 
-@app.route("/like/<int:id>", methods=["POST"])
-def like(id):
-    if spam("like", 40): return back()
-    d = db()
-    if d.execute("select 1 from likes where uid=? and pid=?", (me()["id"], id)).fetchone():
-        d.execute("delete from likes where uid=? and pid=?", (me()["id"], id))
-    elif d.execute("select 1 from posts where id=?", (id,)).fetchone():
-        d.execute("insert into likes values(?,?)", (me()["id"], id))
-    d.commit(); return back()
+@app.route("/react/<int:id>", methods=["POST"])
+def react(id):
+    e = request.form.get("e", ""); d = db()
+    if e in REACT and not spam("like", 40) and d.execute("select 1 from posts where id=?", (id,)).fetchone():
+        cur = d.execute("select e from reacts where uid=? and pid=?", (me()["id"], id)).fetchone()
+        d.execute("delete from reacts where uid=? and pid=?", (me()["id"], id))
+        if not cur or cur["e"] != e: d.execute("insert into reacts(uid,pid,e) values(?,?,?)", (me()["id"], id, e))
+        d.commit()
+    return back("p%d" % id)
+
+@app.route("/follow/<name>", methods=["POST"])
+def follow(name):
+    u = db().execute("select id from users where name=?", (name,)).fetchone() or abort(404)
+    i = me()["id"]
+    if u["id"] != i:
+        if db().execute("select 1 from follows where a=? and b=?", (i, u["id"])).fetchone():
+            db().execute("delete from follows where a=? and b=?", (i, u["id"]))
+        else:
+            db().execute("insert into follows(a,b) values(?,?)", (i, u["id"]))
+        db().commit()
+    return back()
+
+@app.route("/avatar/<name>")
+def avatar(name):
+    r = db().execute("select f.mime,f.data from users u join files f on f.id=u.avatar where u.name=?", (name,)).fetchone()
+    if not r: return "", 404, {"Cache-Control": "max-age=300"}
+    return bytes(r["data"]), 200, {"Content-Type": r["mime"], "Cache-Control": "public, max-age=300"}
+
+@app.route("/img/<int:id>")
+def img(id):
+    r = db().execute("select mime,data from files where id=?", (id,)).fetchone() or abort(404)
+    return bytes(r["data"]), 200, {"Content-Type": r["mime"], "Cache-Control": "public, max-age=31536000, immutable"}
 
 @app.route("/comment/<int:id>", methods=["POST"])
 def comment(id):
     b = request.form.get("body", "").strip()[:500]
     if b and not spam("comment", 10) and db().execute("select 1 from posts where id=?", (id,)).fetchone():
         db().execute("insert into comments(uid,pid,body,ts) values(?,?,?,?)", (me()["id"], id, b, time.time())); db().commit()
-    return back()
+    return back("p%d" % id)
 
 @app.route("/delete/post/<int:id>", methods=["POST"])
 def delpost(id):
-    d = db()
-    if d.execute("delete from posts where id=? and uid=?", (id, me()["id"])).rowcount:
-        d.execute("delete from comments where pid=?", (id,)); d.execute("delete from likes where pid=?", (id,))
-    d.commit(); return back()
+    d = db(); r = d.execute("select img from posts where id=? and uid=?", (id, me()["id"])).fetchone()
+    if r:
+        d.execute("delete from posts where id=?", (id,)); d.execute("delete from comments where pid=?", (id,)); d.execute("delete from reacts where pid=?", (id,))
+        if r["img"]: d.execute("delete from files where id=?", (r["img"],))
+        d.commit()
+    return back()
 
 @app.route("/delete/comment/<int:id>", methods=["POST"])
 def delcomment(id):
@@ -211,7 +264,11 @@ def delcomment(id):
 def profile(name):
     u = db().execute("select * from users where name=?", (name,)).fetchone() or abort(404)
     n = nparam(); p, more = posts("where p.uid=?", (u["id"],), n)
-    return render_template("profile.html", u=u, posts=p, more=more, n=n + 10)
+    d = db(); i = me()["id"]
+    fo = d.execute("select count(*) c from follows where b=?", (u["id"],)).fetchone()["c"]
+    fg = d.execute("select count(*) c from follows where a=?", (u["id"],)).fetchone()["c"]
+    isf = bool(d.execute("select 1 from follows where a=? and b=?", (i, u["id"])).fetchone())
+    return render_template("profile.html", u=u, posts=p, more=more, n=n + 10, fo=fo, fg=fg, isf=isf)
 
 @app.route("/search")
 def search():
@@ -248,6 +305,16 @@ def settings():
         f = request.form
         if f.get("do") == "bio":
             db().execute("update users set bio=? where id=?", (f.get("bio", "")[:300], me()["id"])); db().commit(); flash("Описание сохранено ✨")
+        elif f.get("do") == "avatar" and request.files.get("img") and not spam("img", 5):
+            try:
+                fid = save_img(request.files["img"], 256, True); old = me()["avatar"]
+                db().execute("update users set avatar=? where id=?", (fid, me()["id"]))
+                if old: db().execute("delete from files where id=?", (old,))
+                db().commit(); flash("Фото профиля обновлено 📸")
+            except Exception: flash("Не удалось загрузить фото. Нужен файл JPG или PNG.")
+        elif f.get("do") == "noavatar":
+            if me()["avatar"]: db().execute("delete from files where id=?", (me()["avatar"],))
+            db().execute("update users set avatar=NULL where id=?", (me()["id"],)); db().commit(); flash("Фото удалено")
         elif f.get("do") == "pw" and not spam("pw", 5, 300):
             if not check_password_hash(me()["pw"], f.get("old", "")): flash("Старый пароль неверный")
             elif len(f.get("new", "")) < 6: flash("Новый пароль минимум 6 символов")
