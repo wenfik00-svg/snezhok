@@ -548,7 +548,9 @@ def admin_ban(id):
 def admin_rename(id):
     need_admin(); n = request.form.get("name", "").strip(); err = check_name(n, id)
     if err: flash(err)
-    else: db().execute("update users set name=? where id=?", (n, id)); db().commit(); flash("Ник изменён на «%s»" % n)
+    else:
+        db().execute("update users set name=? where id=?", (n, id)); db().commit(); flash("Ник изменён на «%s»" % n)
+        if "/u/" in (request.referrer or ""): return redirect(url_for("profile", name=n))
     return back()
 
 @app.route("/admin/wipe/<int:id>", methods=["POST"])
