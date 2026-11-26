@@ -66,9 +66,20 @@ class Conn:
     def commit(s): s.c.commit()
     def close(s): s.c.close()
 
+# ---- шифрование сообщений в базе (AES, Fernet). Ключ берётся из ENC_KEY или SECRET_KEY и в базе не хранится ----
+import hashlib
+from cryptography.fernet import Fernet, InvalidToken
+F = Fernet(base64.urlsafe_b64encode(hashlib.sha256(("msg:" + (os.environ.get("ENC_KEY") or app.secret_key)).encode()).digest()))
+def enc(t): return "enc:" + F.encrypt(t.encode()).decode()
+def dec(t):
+    if t and t.startswith("enc:"):
+        try: return F.decrypt(t[4:].encode()).decode()
+        except InvalidToken: return "🔒 не удалось расшифровать"
+    return t
+
 ALT = [("users", "last_seen", "real default 0"), ("users", "typing_to", "integer"),
        ("users", "typing_ts", "real default 0"), ("msgs", "seen", "integer default 0"),
-       ("users", "avatar", "integer"), ("posts", "img", "integer")]
+       ("users", "avatar", "integer"), ("users", "admin", "integer default 0"), ("users", "banned", "integer default 0"), ("users", "badge", "text"), ("users", "color", "integer default 0"), ("posts", "img", "integer")]
 def init():
     c = Conn()
     if DBURL:
@@ -81,6 +92,12 @@ def init():
             except sqlite3.OperationalError: pass
     try:
         c.execute("insert into reacts(uid,pid,e) select uid,pid,'❤️' from likes where (uid,pid) not in (select uid,pid from reacts)")
+    except Exception:
+        try: c.c.rollback()
+        except Exception: pass
+    try:  # зашифровать старые сообщения, которые лежат открытым текстом
+        for r in c.execute("select id,body from msgs where body not like ?", ("enc:%",)).fetchall():
+            c.execute("update msgs set body=? where id=?", (enc(r["body"]), r["id"]))
     except Exception:
         try: c.c.rollback()
         except Exception: pass
@@ -103,17 +120,45 @@ def limited(key, n, sec):
     if len(q) >= n: return True
     q.append(now); return False
 
+ADMINS = {x.strip().lower() for x in os.environ.get("ADMIN_USERS", "").split(",") if x.strip()}
+
 def me():
     if "uid" not in session: return None
     if not hasattr(g, "me"):
         g.me = db().execute("select * from users where id=?", (session["uid"],)).fetchone()
-        if g.me is None: session.clear(); return None
+        if g.me is not None and g.me["name"].lower() in ADMINS and not g.me["admin"]:
+            db().execute("update users set admin=1 where id=?", (g.me["id"],)); db().commit()
+            g.me = db().execute("select * from users where id=?", (session["uid"],)).fetchone()
+        if g.me is None or g.me["banned"]: session.clear(); g.me = None; return None
     return g.me
 @app.context_processor
 def ctx():
     return dict(me=me(), csrf=session.setdefault("csrf", secrets.token_hex(16)))
 @app.template_filter("hue")
 def hue(s): return sum(map(ord, s)) * 37 % 360
+BADGES = ["", "🎅", "🦌", "☃️", "🎁", "⭐", "🧝", "❄️", "🎄", "🔔"]
+STYLES = [(0, "Обычный"), (1, "Дед Мороз"), (2, "Ёлочка"), (3, "Золото"), (4, "Лёд"), (5, "Гирлянда")]
+@app.template_filter("nm")
+def nm(name):
+    from markupsafe import Markup
+    c = g.setdefault("fl", {})
+    if name not in c:
+        r = db().execute("select badge,color from users where name=?", (name,)).fetchone()
+        c[name] = ((r["badge"] or ""), (r["color"] or 0)) if r else ("", 0)
+    b, k = c[name]
+    return Markup('<span class="nmw">{}<span class="nm c{}">{}</span></span>').format((Markup('<i class="bd">👑</i>') if name.lower() in admin_names() else Markup("")) + (Markup('<i class="bd">%s</i>' % b) if b else Markup("")), k, name)
+def admin_names():
+    if not hasattr(g, "adm"):
+        g.adm = {r["name"].lower() for r in db().execute("select name from users where admin=1").fetchall()}
+    return g.adm
+@app.template_filter("crown")
+def crown(n): return "👑 " if n.lower() in admin_names() else ""
+
+def check_name(n, uid):
+    if not re.fullmatch(r"[A-Za-zА-Яа-яЁё0-9_]{3,20}", n): return "3–20 символов: буквы, цифры или _"
+    if db().execute("select 1 from users where name=? and id!=?", (n, uid)).fetchone(): return "Это имя уже занято"
+    return None
+
 @app.template_filter("tm")
 def tm(t): return datetime.fromtimestamp(t).strftime("%H:%M")
 @app.template_filter("dt")
@@ -152,7 +197,7 @@ def register():
             u0 = db().execute("select * from users where name=?", (n,)).fetchone()
             if not re.fullmatch(r"[A-Za-zА-Яа-яЁё0-9_]{3,20}", n): flash("Имя: 3–20 букв, цифр или _")
             elif len(p) < 6: flash("Пароль минимум 6 символов")
-            elif u0 and check_password_hash(u0["pw"], p):
+            elif u0 and not u0["banned"] and check_password_hash(u0["pw"], p):
                 session.clear(); session.permanent = True; session["uid"] = u0["id"]
                 return redirect(url_for("feed"))
             elif u0: flash("Это имя уже занято. Если это ваш аккаунт, нажмите «Войти» и введите свой пароль.")
@@ -170,8 +215,10 @@ def login():
         else:
             u = db().execute("select * from users where name=?", (request.form.get("name", "").strip(),)).fetchone()
             if u and check_password_hash(u["pw"], request.form.get("password", "")):
-                session.clear(); session.permanent = True; session["uid"] = u["id"]; return redirect(url_for("feed"))
-            flash("Неверное имя или пароль")
+                if u["banned"]: flash("🚫 Аккаунт заблокирован администратором")
+                else:
+                    session.clear(); session.permanent = True; session["uid"] = u["id"]; return redirect(url_for("feed"))
+            else: flash("Неверное имя или пароль")
     return render_template("auth.html", reg=False)
 
 @app.route("/logout", methods=["POST"])
@@ -249,7 +296,8 @@ def comment(id):
 
 @app.route("/delete/post/<int:id>", methods=["POST"])
 def delpost(id):
-    d = db(); r = d.execute("select img from posts where id=? and uid=?", (id, me()["id"])).fetchone()
+    d = db(); r = d.execute("select img,uid from posts where id=?", (id,)).fetchone()
+    if r and r["uid"] != me()["id"] and not me()["admin"]: r = None
     if r:
         d.execute("delete from posts where id=?", (id,)); d.execute("delete from comments where pid=?", (id,)); d.execute("delete from reacts where pid=?", (id,))
         if r["img"]: d.execute("delete from files where id=?", (r["img"],))
@@ -258,7 +306,7 @@ def delpost(id):
 
 @app.route("/delete/comment/<int:id>", methods=["POST"])
 def delcomment(id):
-    db().execute("delete from comments where id=? and uid=?", (id, me()["id"])); db().commit(); return back()
+    db().execute("delete from comments where id=?" + ("" if me()["admin"] else " and uid=?"), (id,) if me()["admin"] else (id, me()["id"])); db().commit(); return back()
 
 @app.route("/u/<name>")
 def profile(name):
@@ -284,6 +332,7 @@ def chats():
     i = me()["id"]
     users = db().execute("select u.name,m.body,m.ts,(select count(*) from msgs x where x.frm=u.id and x.too=? and x.seen=0) un from msgs m join users u on u.id=(case when m.frm=? then m.too else m.frm end) "
         "where m.id in (select max(id) from msgs where frm=? or too=? group by (case when frm=? then too else frm end)) order by m.id desc", (i, i, i, i, i)).fetchall()
+    users = [dict(r, body=dec(r["body"])) for r in users]
     return render_template("chats.html", users=users)
 
 @app.route("/chat/<name>", methods=["GET", "POST"])
@@ -293,10 +342,11 @@ def chat(name):
     if request.method == "POST":
         b = request.form.get("body", "").strip()[:1000]
         if b and not spam("msg", 20):
-            db().execute("insert into msgs(frm,too,body,ts) values(?,?,?,?)", (i, o["id"], b, time.time())); db().execute("update users set typing_ts=0 where id=?", (i,)); db().commit(); notify(o, me()["name"], b)
+            db().execute("insert into msgs(frm,too,body,ts) values(?,?,?,?)", (i, o["id"], enc(b), time.time())); db().execute("update users set typing_ts=0 where id=?", (i,)); db().commit(); notify(o, me()["name"], b)
         return redirect(url_for("chat", name=o["name"]))
     db().execute("update msgs set seen=1 where frm=? and too=? and seen=0", (o["id"], i)); db().commit()
     m = db().execute("select * from msgs where (frm=? and too=?) or (frm=? and too=?) order by id desc limit 100", (i, o["id"], o["id"], i)).fetchall()[::-1]
+    m = [dict(r, body=dec(r["body"])) for r in m]
     return render_template("chat.html", o=o, msgs=m, ago=time.time() - (o["last_seen"] or 0))
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -305,6 +355,19 @@ def settings():
         f = request.form
         if f.get("do") == "bio":
             db().execute("update users set bio=? where id=?", (f.get("bio", "")[:300], me()["id"])); db().commit(); flash("Описание сохранено ✨")
+        elif f.get("do") == "style":
+            b, k = f.get("badge", ""), f.get("color", 0, type=int)
+            if b in BADGES and 0 <= k < len(STYLES):
+                db().execute("update users set badge=?,color=? where id=?", (b, k, me()["id"])); db().commit(); flash("Стиль сохранён 🎨")
+        elif f.get("do") == "name":
+            n = f.get("name", "").strip()
+            if n == me()["name"]: pass
+            elif not me()["admin"] and spam("rename", 3, 3600): pass
+            else:
+                err = check_name(n, me()["id"])
+                if err: flash(err)
+                else:
+                    db().execute("update users set name=? where id=?", (n, me()["id"])); db().commit(); flash("🎉 Готово! Теперь вас зовут «%s»" % n)
         elif f.get("do") == "avatar" and request.files.get("img") and not spam("img", 5):
             try:
                 fid = save_img(request.files["img"], 256, True); old = me()["avatar"]
@@ -321,7 +384,7 @@ def settings():
             else:
                 db().execute("update users set pw=? where id=?", (generate_password_hash(f["new"]), me()["id"])); db().commit(); flash("Пароль изменён 🔐")
         return redirect(url_for("settings"))
-    return render_template("settings.html")
+    return render_template("settings.html", badges=BADGES, styles=STYLES)
 
 def find(q):
     l = "%" + q.replace("%", "").replace("_", "") + "%"
@@ -346,7 +409,7 @@ def poll():
     last = d.execute("select coalesce(max(id),0) m from msgs where too=?", (i,)).fetchone()["m"]
     new = []
     if since >= 0:
-        new = [dict(r) for r in d.execute("select m.id,m.body,u.name from msgs m join users u on u.id=m.frm where m.too=? and m.id>? order by m.id limit 5", (i, since)).fetchall()]
+        new = [dict(r, body=dec(r["body"])) for r in d.execute("select m.id,m.body,u.name from msgs m join users u on u.id=m.frm where m.too=? and m.id>? order by m.id limit 5", (i, since)).fetchall()]
     out = {"new": new, "last": int(last)}
     o = d.execute("select * from users where name=?", (request.args.get("chat", ""),)).fetchone()
     if o:
@@ -454,6 +517,48 @@ def push_unsub():
 def push_test():
     if not spam("pushtest", 3): push(me()["id"], "Снежок ❄", "Уведомления работают! 🎄", "/chats", "test")
     return "", 204
+
+@app.route("/api/name")
+def api_name():
+    n = request.args.get("n", "").strip()
+    if n == me()["name"]: return jsonify(ok=True, msg="Это ваше текущее имя")
+    e = check_name(n, me()["id"]); return jsonify(ok=e is None, msg=e or "Имя свободно!")
+
+# ---- админ-панель ----
+def need_admin():
+    if not me()["admin"]: abort(403)
+
+@app.route("/admin")
+def admin():
+    need_admin(); q = request.args.get("q", "").strip()[:30]
+    users = db().execute("select u.id,u.name,u.admin,u.banned,(select count(*) from posts p where p.uid=u.id) np from users u "
+                         "where u.name like ? order by u.id desc limit 100", ("%" + q.replace("%", "").replace("_", "") + "%",)).fetchall()
+    return render_template("admin.html", users=users, q=q)
+
+@app.route("/admin/ban/<int:id>", methods=["POST"])
+def admin_ban(id):
+    need_admin(); u = db().execute("select * from users where id=?", (id,)).fetchone()
+    if u and not u["admin"]:
+        db().execute("update users set banned=? where id=?", (0 if u["banned"] else 1, id)); db().commit()
+        flash(("Разблокирован: " if u["banned"] else "🚫 Заблокирован: ") + u["name"])
+    elif u: flash("Админа заблокировать нельзя")
+    return back()
+
+@app.route("/admin/rename/<int:id>", methods=["POST"])
+def admin_rename(id):
+    need_admin(); n = request.form.get("name", "").strip(); err = check_name(n, id)
+    if err: flash(err)
+    else: db().execute("update users set name=? where id=?", (n, id)); db().commit(); flash("Ник изменён на «%s»" % n)
+    return back()
+
+@app.route("/admin/wipe/<int:id>", methods=["POST"])
+def admin_wipe(id):
+    need_admin(); d = db()
+    for r in d.execute("select id,img from posts where uid=?", (id,)).fetchall():
+        d.execute("delete from comments where pid=?", (r["id"],)); d.execute("delete from reacts where pid=?", (r["id"],))
+        if r["img"]: d.execute("delete from files where id=?", (r["img"],))
+        d.execute("delete from posts where id=?", (r["id"],))
+    d.commit(); flash("Все посты пользователя удалены"); return back()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)

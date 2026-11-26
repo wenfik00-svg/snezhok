@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% from "_p.html" import lst, av, tok with context %}{% block c %}
-<div class="card prof"><div class="cover"></div>{{ av(u.name,'huge') }}<h1>{{ u.name }}</h1><p class="muted">{{ u.bio or 'Пока без описания' }}</p>
+<div class="card prof"><div class="cover"></div>{{ av(u.name,'huge') }}<h1>{{ u.name|nm }}</h1><p class="muted">{{ u.bio or 'Пока без описания' }}</p>
 <div class="stats"><span><b>{{ fo }}</b> подписчиков</span><span><b>{{ fg }}</b> подписок</span></div>
 {% if u.id != me.id %}<div class="row c"><form method="post" action="{{ url_for('follow', name=u.name) }}">{{ tok() }}<button class="btn {{ 'out' if isf }}">{{ 'Отписаться' if isf else '➕ Подписаться' }}</button></form><a class="btn alt" href="{{ url_for('chat', name=u.name) }}">✉ Написать</a></div>
 {% else %}<a class="btn" href="{{ url_for('settings') }}">Изменить профиль</a>{% endif %}</div>

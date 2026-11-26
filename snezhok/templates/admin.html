@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% from "_p.html" import tok, av with context %}{% block c %}<h2>👑 Админ-панель</h2>
+<form><input class="srch2" name="q" placeholder="Найти пользователя" value="{{ q }}"></form>
+<div class="list">{% for u in users %}<div class="row2"><a class="pl" href="{{ url_for('profile', name=u.name) }}">{{ av(u.name,'big') }}<div><b>{{ u.name|nm }}</b><small>{{ u.np }} постов{{ ' · 🚫 заблокирован' if u.banned }}</small></div></a>
+<details class="rx"><summary class="btn sm alt">⚙ Действия</summary><div class="pick admmenu">
+<form method="post" action="{{ url_for('admin_rename', id=u.id) }}" class="row">{{ tok() }}<input name="name" placeholder="Новый ник" maxlength="20" required><button class="btn sm">OK</button></form>
+{% if not u.admin %}<form method="post" action="{{ url_for('admin_ban', id=u.id) }}">{{ tok() }}<button class="btn sm {{ '' if u.banned else 'out' }}">{{ '✅ Разблокировать' if u.banned else '🚫 Заблокировать' }}</button></form>{% endif %}
+<form method="post" action="{{ url_for('admin_wipe', id=u.id) }}" onsubmit="return confirm('Удалить ВСЕ посты этого пользователя?')">{{ tok() }}<button class="btn sm out">🗑 Удалить все посты</button></form>
+</div></details></div>{% else %}<p class="muted pad">Никого не нашли</p>{% endfor %}</div>{% endblock %}

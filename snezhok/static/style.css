@@ -56,3 +56,11 @@ button,.btn{cursor:pointer;border:0;border-radius:12px;padding:10px 16px;backgro
 .logo,.srch,form:has(.srch),.me span,.side .av{display:none}.me{padding:0 6px;margin:0;background:none}.side nav{flex:1;flex-direction:row;margin:0;gap:0}.side nav a{flex:1;flex-direction:column;justify-content:center;gap:0;height:56px;padding:0;font-size:11px;border-radius:12px}
 .side nav a:hover{transform:none}.side nav a::before{display:none}.side nav a.on{background:none}.ic{width:30px;height:30px}.ic svg{width:24px;height:24px}.bdg{position:absolute;top:2px;right:12%;margin:0;padding:0 5px}
 .tree{display:none}.col{padding-bottom:20px}#msgs{height:calc(100vh - 300px)}.row2 .btn{display:none}#toast{top:30px;left:10px;right:10px}}
+.nmw{display:inline-flex;align-items:center;gap:5px}.bd{font-style:normal}.nm{font-weight:inherit}
+.nm.c1,.nm.c2,.nm.c3,.nm.c4,.nm.c5{-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;background-size:200% 100%}
+.nm.c1{background-image:linear-gradient(90deg,#ff3b3b,#ff9a5a,#ff3b3b)}.nm.c2{background-image:linear-gradient(90deg,#1fb85f,#a6e85d,#1fb85f)}
+.nm.c3{background-image:linear-gradient(90deg,#ffb300,#fff3b0,#ffb300);animation:shim 3s linear infinite}.nm.c4{background-image:linear-gradient(90deg,#5eb5f7,#d6f1ff,#5eb5f7)}
+.nm.c5{background-image:linear-gradient(90deg,#ff3b3b,#ffd23b,#3bff8a,#3b9bff,#ff3b3b);animation:shim 2.5s linear infinite}@keyframes shim{to{background-position:200% 0}}
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}.opt input{display:none}.opt span{display:inline-block;padding:8px 13px;border-radius:12px;background:var(--inp);cursor:pointer;transition:.2s;font-size:17px}.opt span:hover{transform:translateY(-2px)}.opt input:checked+span{outline:2px solid var(--ac);transform:scale(1.07)}
+.roll{animation:roll .6s}@keyframes roll{to{transform:rotate(360deg) scale(1.2)}}.cf{position:fixed;top:-14px;width:8px;height:13px;z-index:40;pointer-events:none;animation:fall linear forwards}
+.admmenu{flex-direction:column;gap:8px;min-width:230px;right:0;left:auto;bottom:auto;top:110%;padding:10px}.admmenu .row input{padding:8px 10px}.crownbtn{font-size:20px;animation:hop 2.5s infinite}

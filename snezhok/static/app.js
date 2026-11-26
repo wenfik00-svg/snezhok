@@ -33,3 +33,11 @@ const key=(await(await fetch('/api/push/key')).json()).key;sub=await reg.pushMan
 await post('/api/push/subscribe',{sub:JSON.stringify(sub)});draw()};
 tb.onclick=()=>post('/api/push/test',{})})()}
 document.querySelectorAll('input[type=file]').forEach(i=>i.onchange=()=>{const s=i.parentElement.querySelector('span');const t=i.files[0]?'✓ '+i.files[0].name.slice(0,16):'Фото';if(s)s.textContent=t;else i.parentElement.firstChild.textContent=t+' '});
+const rnd=$('#rnd');if(rnd)rnd.onclick=()=>{const a=["Снежный","Ледяной","Тёплый","Весёлый","Мягкий","Золотой","Добрый","Лесной"],n=["Олень","Пряник","Эльф","Носок","Мишка","Снегирь","Ёжик","Бубенец"],p=x=>x[Math.floor(Math.random()*x.length)];$('#nn').value=p(a)+'_'+p(n)+Math.floor(10+Math.random()*90)};
+const nm=$('#nm');if(nm){const st=$('#nmst'),A=['Снежный','Пушистый','Ледяной','Весёлый','Мандариновый','Сказочный','Искристый','Хрустящий'],N=['Снеговик','Олень','Пингвин','Ёжик','Эльф','Пряник','Медвежонок','Хлопушка'];
+const pick=a=>a[Math.floor(Math.random()*a.length)];let t;
+async function chk(){const r=await(await fetch('/api/name?n='+encodeURIComponent(nm.value))).json();st.textContent=(r.ok?'✅ ':'❌ ')+r.msg;st.style.color=r.ok?'#35d07f':'#ff6b6b'}
+nm.oninput=()=>{clearTimeout(t);t=setTimeout(chk,300)};
+$('#dice').onclick=()=>{let n;do{n=pick(A)+pick(N)}while(n.length>20);if(n.length<=17)n+=Math.floor(Math.random()*90+10);nm.value=n;chk();const d=$('#dice');d.classList.remove('roll');void d.offsetWidth;d.classList.add('roll')}}
+function confetti(){const c=['#e63946','#ffd23b','#3bff8a','#3b9bff','#ff7a59','#fff'];for(let i=0;i<70;i++){const e=document.createElement('i');e.className='cf';e.style.cssText=`left:${Math.random()*100}vw;background:${c[i%6]};animation-duration:${1.5+Math.random()*2}s;animation-delay:${Math.random()*.6}s;transform:rotate(${Math.random()*360}deg)`;document.body.appendChild(e);setTimeout(()=>e.remove(),4500)}}
+if(document.querySelector('.flash')?.textContent.includes('🎉'))confetti();

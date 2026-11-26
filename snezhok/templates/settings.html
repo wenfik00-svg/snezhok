@@ -1,4 +1,12 @@
 {% extends "base.html" %}{% from "_p.html" import tok, av with context %}{% block c %}<h2>⚙ Настройки</h2>
+{% if me.admin %}<a class="card" href="{{ url_for('admin') }}">👑 Админ-панель: баны, ники, удаление постов</a>{% endif %}
+<form method="post" class="card">{{ tok() }}<input type="hidden" name="do" value="name"><h3>✏️ Имя пользователя</h3>
+<div class="row"><input name="name" id="nm" value="{{ me.name }}" maxlength="20" autocomplete="off" required><button type="button" class="btn alt" id="dice" title="Случайный новогодний ник">🎲</button></div>
+<small id="nmst" class="muted">3–20 символов: буквы, цифры, _ · нажмите 🎲, чтобы придумать ник</small><br><button class="btn" style="margin-top:8px">Сменить имя</button></form>
+<form method="post" class="card">{{ tok() }}<input type="hidden" name="do" value="style"><h3>🎨 Значок и стиль имени</h3>
+<div class="opts">{% for b in badges %}<label class="opt"><input type="radio" name="badge" value="{{ b }}" {{ 'checked' if (me.badge or '') == b }}><span>{{ b or '—' }}</span></label>{% endfor %}</div>
+<div class="opts">{% for k, n in styles %}<label class="opt"><input type="radio" name="color" value="{{ k }}" {{ 'checked' if (me.color or 0) == k }}><span><b class="nm c{{ k }}">{{ n }}</b></span></label>{% endfor %}</div>
+<p class="muted">Вас увидят так: {{ me.name|nm }}</p><button class="btn">Сохранить стиль</button></form>
 <form method="post" enctype="multipart/form-data" class="card">{{ tok() }}<input type="hidden" name="do" value="avatar"><h3>📸 Фото профиля</h3><div class="row c">{{ av(me.name,'big') }}<label class="btn cam">Выбрать <input type="file" name="img" accept="image/*" hidden required></label><button class="btn">Загрузить</button></div></form>
 <div class="card"><h3>🔔 Уведомления</h3><p class="muted" id="pushst">Проверяем…</p><button class="btn" id="pushbtn" style="display:none"></button> <button class="btn out" id="pushtest" style="display:none">Тест</button></div>
 <div class="card"><h3>Тема</h3><button class="btn" onclick="setTheme('dark')">🌙 Тёмная</button> <button class="btn" onclick="setTheme('light')">☀ Светлая</button></div>

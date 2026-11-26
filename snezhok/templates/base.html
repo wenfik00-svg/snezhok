@@ -13,7 +13,7 @@
 <form action="{{ url_for('search') }}"><input class="srch" name="q" placeholder="🔍 Поиск" value="{{ request.args.get('q','') }}"></form>
 <nav>{% set items=[('feed',url_for('feed'),'home','Лента'),('people',url_for('people'),'users','Люди'),('chats',url_for('chats'),'chat','Чаты'),('profile',url_for('profile',name=me.name),'user','Профиль'),('settings',url_for('settings'),'gear','Настройки')] %}{% set ep=request.endpoint %}
 {% for i in items %}<a href="{{ i[1] }}" class="i-{{ i[2] }} {{ 'on' if (ep==i[0] and (ep!='profile' or request.view_args.name|lower==me.name|lower)) or (i[0]=='chats' and ep=='chat') or (i[0]=='people' and ep=='search') }}">{{ ic(i[2]) }}<em>{{ i[3] }}</em>{% if i[0]=='chats' %}<b class="bdg" id="bdg"></b>{% endif %}</a>{% endfor %}</nav>
-<div class="me">{{ av(me.name) }}<span>{{ me.name }}</span><button id="th" title="Тема">🌓</button></div></aside>{% endif %}
+<div class="me">{{ av(me.name) }}<span>{{ me.name|nm }}</span>{% if me.admin %}<a href="{{ url_for('admin') }}" title="Админ-панель" class="crownbtn">🛡</a>{% endif %}<button id="th" title="Тема">🌓</button></div></aside>{% endif %}
 <main><div class="col">{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}{% block c %}{% endblock %}</div></main></div>
 <svg class="tree" viewBox="0 0 120 150"><polygon points="60,10 95,55 25,55" fill="#1f8a4c"/><polygon points="60,32 105,95 15,95" fill="#23a05a"/><polygon points="60,62 115,132 5,132" fill="#2bb866"/><rect x="52" y="132" width="16" height="16" fill="#7a4a21"/>
 <polygon points="60,0 63,8 72,8 65,13 68,22 60,17 52,22 55,13 48,8 57,8" fill="#ffd54a"/>

@@ -1,2 +1,2 @@
-{% from "_p.html" import av with context %}{% for u in users %}<div class="row2"><a class="pl" href="{{ url_for('profile', name=u.name) }}">{{ av(u.name,'big') }}<div><b>{{ u.name }}</b><small>{{ u.bio or 'Без описания' }}</small></div></a><a class="btn sm" href="{{ url_for('chat', name=u.name) }}">✉ Написать</a></div>
+{% from "_p.html" import av with context %}{% for u in users %}<div class="row2"><a class="pl" href="{{ url_for('profile', name=u.name) }}">{{ av(u.name,'big') }}<div><b>{{ u.name|nm }}</b><small>{{ u.bio or 'Без описания' }}</small></div></a><a class="btn sm" href="{{ url_for('chat', name=u.name) }}">✉ Написать</a></div>
 {% else %}<p class="muted pad">Никого не нашли ❄️</p>{% endfor %}

@@ -3,14 +3,14 @@
 {% macro rxf(p, e, cls, txt) %}<form method="post" action="{{ url_for('react', id=p.id) }}">{{ tok() }}<input type="hidden" name="e" value="{{ e }}"><button class="{{ cls }}">{{ txt }}</button></form>{% endmacro %}
 {% macro post(p) %}
 <article class="card post" id="p{{ p.id }}">
- <div class="h">{{ av(p.name) }}<div class="who"><a href="{{ url_for('profile', name=p.name) }}"><b>{{ p.name }}</b></a><small>{{ p.ts|dt }}</small></div>
- {% if p.uid == me.id %}<form method="post" action="{{ url_for('delpost', id=p.id) }}" class="del">{{ tok() }}<button class="x" title="Удалить пост">🗑</button></form>{% endif %}</div>
+ <div class="h">{{ av(p.name) }}<div class="who"><a href="{{ url_for('profile', name=p.name) }}"><b>{{ p.name|nm }}</b></a><small>{{ p.ts|dt }}</small></div>
+ {% if p.uid == me.id or me.admin %}<form method="post" action="{{ url_for('delpost', id=p.id) }}" class="del">{{ tok() }}<button class="x" title="Удалить пост">🗑</button></form>{% endif %}</div>
  {% if p.body %}<p class="body">{{ p.body }}</p>{% endif %}
  {% if p.img %}<a href="{{ url_for('img', id=p.img) }}" target="_blank"><img class="pimg" src="{{ url_for('img', id=p.img) }}" alt="" loading="lazy"></a>{% endif %}
  <div class="rxs">{% for x in p.rx %}{{ rxf(p, x.e, 'chip' ~ (' me' if p.mine == x.e else ''), x.e ~ ' ' ~ x.c) }}{% endfor %}
  <details class="rx"><summary class="chip">☺ +</summary><div class="pick">{% for e in ['❤️','👍','😂','🔥','🎄'] %}{{ rxf(p, e, '', e) }}{% endfor %}</div></details></div>
- {% for c in p.comments %}<div class="cm">{{ av(c.name, 'sm') }}<div><a href="{{ url_for('profile', name=c.name) }}"><b>{{ c.name }}</b></a> {{ c.body }}</div>
- {% if c.uid == me.id %}<form method="post" action="{{ url_for('delcomment', id=c.id) }}">{{ tok() }}<button class="x">✕</button></form>{% endif %}</div>{% endfor %}
+ {% for c in p.comments %}<div class="cm">{{ av(c.name, 'sm') }}<div><a href="{{ url_for('profile', name=c.name) }}"><b>{{ c.name|nm }}</b></a> {{ c.body }}</div>
+ {% if c.uid == me.id or me.admin %}<form method="post" action="{{ url_for('delcomment', id=c.id) }}">{{ tok() }}<button class="x">✕</button></form>{% endif %}</div>{% endfor %}
  <form method="post" action="{{ url_for('comment', id=p.id) }}" class="row">{{ tok() }}<input name="body" maxlength="500" placeholder="Комментарий…" required><button>➤</button></form>
 </article>
 {% endmacro %}
